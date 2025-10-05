@@ -1449,10 +1449,19 @@ function App() {
     setToken(null);
   };
 
-  return token ? (
-    <TrackerPage token={token} onLogout={handleLogout} />
-  ) : (
-    <AuthPage onLoginSuccess={handleLoginSuccess} />
+  return (
+    <>
+      {token ? (
+        <TrackerPage token={token} onLogout={handleLogout} />
+      ) : (
+        <AuthPage onLoginSuccess={handleLoginSuccess} />
+      )}
+      <footer className="w-full text-center py-6 bg-white shadow-inner mt-8">
+        <span className="text-gray-500 text-sm font-medium">
+          Made by Umang Raval. All rights reserved @2025
+        </span>
+      </footer>
+    </>
   );
 }
 
