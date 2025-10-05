@@ -37,7 +37,8 @@ import {
 } from "lucide-react";
 
 // --- API Configuration ---
-const API_BASE_URL = "http://localhost:5001"; // URL of your backend server
+// const API_BASE_URL = "http://localhost:5001"; // URL of your backend server
+const API_BASE_URL = "https://spendy-4w9f.onrender.com"; // URL of your backend server
 
 // --- Constants & Helpers ---
 const MONTHS = [
