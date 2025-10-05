@@ -34,11 +34,12 @@ import {
   FileText,
   XCircle,
   ArrowLeft,
+  LogOut,
 } from "lucide-react";
 
 // --- API Configuration ---
 // const API_BASE_URL = "http://localhost:5001"; // URL of your backend server
-const API_BASE_URL = "https://spendy-4w9f.onrender.com"; // URL of your backend server
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL; // URL of your backend server
 
 // --- Constants & Helpers ---
 const MONTHS = [
@@ -132,9 +133,112 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   );
 };
 
-// --- Main Application Components ---
+// --- AUTHENTICATION COMPONENTS ---
+const AuthPage = ({ onLoginSuccess }) => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-const YearSetup = ({ onSetupComplete, setApiError }) => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
+    try {
+      const response = await fetch(API_BASE_URL + endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "An error occurred.");
+      }
+      onLoginSuccess(data.token);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8 space-y-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-gray-800">
+            {isLogin ? "Welcome Back!" : "Create Account"}
+          </h1>
+          <p className="text-gray-500 mt-2">
+            {isLogin
+              ? "Log in to view your dashboard"
+              : "Sign up to start tracking"}
+          </p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+          <div>
+            <label
+              htmlFor="username"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Username
+            </label>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 transition-colors"
+          >
+            {loading ? "Processing..." : isLogin ? "Log In" : "Sign Up"}
+          </button>
+        </form>
+        <p className="text-center text-sm text-gray-600">
+          {isLogin ? "Don't have an account?" : "Already have an account?"}
+          <button
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError(null);
+            }}
+            className="font-medium text-indigo-600 hover:text-indigo-500 ml-1"
+          >
+            {isLogin ? "Sign up" : "Log in"}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+// --- TRACKER COMPONENTS ---
+
+const YearSetup = ({ onSetupComplete, setApiError, token }) => {
   const [year, setYear] = useState(new Date().getFullYear());
   const [categories, setCategories] = useState(
     "Rent, Subscriptions, Entertainment, Food & Drink, Groceries, Shopping, Transport, Travel"
@@ -148,7 +252,9 @@ const YearSetup = ({ onSetupComplete, setApiError }) => {
     if (!year) return;
     setApiError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tracker/${year}`);
+      const response = await fetch(`${API_BASE_URL}/api/tracker/${year}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (response.ok) {
         const existingData = await response.json();
         onSetupComplete(year, existingData);
@@ -174,7 +280,6 @@ const YearSetup = ({ onSetupComplete, setApiError }) => {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-
     const initialData = {
       year,
       categories: categoriesArray,
@@ -190,7 +295,10 @@ const YearSetup = ({ onSetupComplete, setApiError }) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/tracker`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(initialData),
       });
       const createdData = await response.json();
@@ -833,10 +941,8 @@ const LogView = ({ title, logData, headers, renderRow, icon }) => (
   </Section>
 );
 
-// --- Main App Component ---
-function App() {
+const TrackerPage = ({ token, onLogout }) => {
   const [activeTab, setActiveTab] = useState("Monthly Overview");
-  const [year, setYear] = useState(new Date().getFullYear());
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
@@ -844,12 +950,46 @@ function App() {
   const [apiError, setApiError] = useState(null);
   const isInitialMount = useRef(true);
 
+  // --- FIX: This useEffect hook will run once when the component mounts ---
+  useEffect(() => {
+    const loadInitialData = async () => {
+      const currentYear = new Date().getFullYear();
+      setApiError(null);
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/tracker/${currentYear}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        if (response.status === 404) {
+          setData(null); // No data for current year, go to YearSetup
+        } else {
+          const fetchedData = await response.json();
+          if (!response.ok)
+            throw new Error(
+              fetchedData.message || "Failed to fetch initial data"
+            );
+          setData(fetchedData);
+        }
+      } catch (error) {
+        console.error("Failed to load initial data:", error);
+        setApiError(
+          "Could not connect to the server. Please check your connection and refresh."
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadInitialData();
+  }, [token]); // Dependency array ensures this runs when the token is available
+
   // --- State Update Logic ---
   const handleAddExpense = (expense) => {
     const date = new Date(expense.date);
     const monthIndex = date.getMonth();
     const day = date.getDate();
-
     setData((prev) => {
       const newLog = [
         ...(prev.expenseLog || []),
@@ -859,11 +999,9 @@ function App() {
           timestamp: new Date().toISOString(),
         },
       ];
-
       const key = `${monthIndex}-${day}-${expense.category}`;
       const newDailyExpenses = { ...prev.dailyExpenses };
       newDailyExpenses[key] = (newDailyExpenses[key] || 0) + expense.amount;
-
       return { ...prev, expenseLog: newLog, dailyExpenses: newDailyExpenses };
     });
   };
@@ -872,7 +1010,6 @@ function App() {
     const date = new Date(income.date);
     const monthIndex = date.getMonth();
     const weekIndex = getWeekOfMonth(date);
-
     setData((prev) => {
       const newLog = [
         ...(prev.incomeLog || []),
@@ -882,28 +1019,27 @@ function App() {
           timestamp: new Date().toISOString(),
         },
       ];
-
       const key = `${monthIndex}-${weekIndex}`;
       const newWeeklyIncomes = { ...prev.weeklyIncomes };
       newWeeklyIncomes[key] = (newWeeklyIncomes[key] || 0) + income.amount;
-
       return { ...prev, incomeLog: newLog, weeklyIncomes: newWeeklyIncomes };
     });
   };
 
   // Debounced save to backend
   useEffect(() => {
-    if (isInitialMount.current) {
+    if (isInitialMount.current || !data) {
       isInitialMount.current = false;
       return;
     }
-    if (!data) return;
-
     const handler = setTimeout(async () => {
       try {
         await fetch(`${API_BASE_URL}/api/tracker/${data.year}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify(data),
         });
       } catch (error) {
@@ -911,44 +1047,11 @@ function App() {
       }
     }, 1500);
     return () => clearTimeout(handler);
-  }, [data]);
-
-  const loadData = useCallback(async (currentYear) => {
-    setIsLoading(true);
-    setApiError(null);
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/tracker/${currentYear}`
-      );
-      if (response.status === 404) {
-        setData(null); // Explicitly set to null to trigger YearSetup
-        setYear(currentYear); // Keep the selected year
-      } else {
-        const fetchedData = await response.json();
-        if (!response.ok)
-          throw new Error(fetchedData.message || "Failed to fetch");
-        setData(fetchedData);
-        setYear(fetchedData.year);
-      }
-    } catch (error) {
-      console.error("Failed to load data:", error);
-      setApiError(
-        "Could not connect to the server. Please make sure the backend is running and refresh the page."
-      );
-      setData(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadData(year);
-  }, []); // Only run once on initial mount
+  }, [data, token]);
 
   // Derived data calculations
   const derivedData = useMemo(() => {
     if (!data) return null;
-
     const monthlyTotals = MONTHS.map((_, monthIndex) => {
       const categoryTotals = data.categories.map((cat) => {
         const daysInMonth = getDaysInMonth(data.year, monthIndex);
@@ -958,28 +1061,23 @@ function App() {
         }
         return total;
       });
-
       const totalExpenditure = categoryTotals.reduce(
         (sum, total) => sum + total,
         0
       );
-
       let income = 0;
       for (let week = 0; week < 5; week++) {
         income += data.weeklyIncomes?.[`${monthIndex}-${week}`] || 0;
       }
-
       const grossSavings = income - totalExpenditure;
       return { totalExpenditure, income, grossSavings, categoryTotals };
     });
-
     const categoryTotals = data.categories.map((_, catIndex) =>
       monthlyTotals.reduce(
         (sum, month) => sum + (month.categoryTotals[catIndex] || 0),
         0
       )
     );
-
     const grandTotalExpenditure = categoryTotals.reduce(
       (sum, total) => sum + total,
       0
@@ -989,7 +1087,6 @@ function App() {
       0
     );
     const grandTotalSavings = grandTotalIncome - grandTotalExpenditure;
-
     return {
       monthlyTotals,
       categoryTotals,
@@ -1006,15 +1103,6 @@ function App() {
           <XCircle className="text-red-500 h-16 w-16 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-red-800">Connection Error</h1>
           <p className="text-gray-600 mt-2 mb-6">{apiError}</p>
-          <p className="text-sm text-gray-500">
-            Please ensure your backend server (<code>server.js</code>) is
-            running on
-            <code className="bg-gray-200 text-gray-800 p-1 rounded">
-              {" "}
-              http://localhost:5001
-            </code>
-            .
-          </p>
           <button
             onClick={() => window.location.reload()}
             className="mt-6 w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
@@ -1037,11 +1125,9 @@ function App() {
   if (!data || !derivedData)
     return (
       <YearSetup
-        onSetupComplete={(newYear, initialData) => {
-          setYear(newYear);
-          setData(initialData);
-        }}
+        onSetupComplete={(year, initialData) => setData(initialData)}
         setApiError={setApiError}
+        token={token}
       />
     );
 
@@ -1173,6 +1259,13 @@ function App() {
             >
               <Plus size={16} /> Add Expense
             </button>
+            <button
+              onClick={onLogout}
+              title="Logout"
+              className="p-2 rounded-full hover:bg-gray-200 transition-colors"
+            >
+              <LogOut size={20} className="text-gray-600" />
+            </button>
             <div className="md:hidden">
               <select
                 value={activeTab}
@@ -1189,10 +1282,8 @@ function App() {
           </div>
         </nav>
       </header>
-
       <main className="container mx-auto p-4 md:p-6">{renderContent()}</main>
-
-      <div className="md-hidden fixed bottom-4 right-4 flex flex-col gap-3">
+      <div className="md:hidden fixed bottom-4 right-4 flex flex-col gap-3">
         <button
           onClick={() => setIncomeModalOpen(true)}
           className="bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600"
@@ -1206,7 +1297,6 @@ function App() {
           <Plus size={24} />
         </button>
       </div>
-
       <AddTransactionModal
         isOpen={isExpenseModalOpen}
         onClose={() => setExpenseModalOpen(false)}
@@ -1223,19 +1313,17 @@ function App() {
       />
     </div>
   );
-}
+};
 
 const AddTransactionModal = ({ isOpen, onClose, onAdd, type, categories }) => {
   const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState(categories[0]);
+  const [category, setCategory] = useState(categories?.[0] || "");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [item, setItem] = useState("");
   const [invoice, setInvoice] = useState("");
 
   useEffect(() => {
-    if (categories?.length > 0) {
-      setCategory(categories[0]);
-    }
+    if (categories?.length > 0) setCategory(categories[0]);
   }, [categories]);
 
   const handleSubmit = (e) => {
@@ -1346,5 +1434,26 @@ const AddTransactionModal = ({ isOpen, onClose, onAdd, type, categories }) => {
     </Modal>
   );
 };
+
+// --- MAIN APP COMPONENT ---
+function App() {
+  const [token, setToken] = useState(localStorage.getItem("authToken"));
+
+  const handleLoginSuccess = (newToken) => {
+    localStorage.setItem("authToken", newToken);
+    setToken(newToken);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("authToken");
+    setToken(null);
+  };
+
+  return token ? (
+    <TrackerPage token={token} onLogout={handleLogout} />
+  ) : (
+    <AuthPage onLoginSuccess={handleLoginSuccess} />
+  );
+}
 
 export default App;
